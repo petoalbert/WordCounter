@@ -10,7 +10,7 @@ import zio.logging._
 import zio.logging.slf4j._
 import zio._
 import io.github.petoalbert.api._
-import io.github.petoalbert.application.ApplicationService
+import io.github.petoalbert.application.WordCountRegistry
 import io.github.petoalbert.config.AppConfig
 
 object Boot extends App {
@@ -45,8 +45,8 @@ object Boot extends App {
       logFormat.format(correlationId, message)
     }
 
-    val applicationLayer: ZLayer[Any, Throwable, Has[ApplicationService]] =
-      ApplicationService.live
+    val applicationLayer: ZLayer[Any, Throwable, Has[WordCountRegistry]] =
+      WordCountRegistry.mock
 
     val apiLayer: TaskLayer[Has[Api]] =
       (apiConfigLayer ++ applicationLayer ++ actorSystemLayer ++ loggingLayer) >>> Api.live

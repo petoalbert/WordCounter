@@ -3,8 +3,7 @@ package io.github.petoalbert.api
 import akka.http.interop._
 import akka.http.scaladsl.server.Directives._
 import akka.http.scaladsl.server.Route
-import io.github.petoalbert.application.ApplicationService
-import io.github.petoalbert.domain.{EventType, WordCount}
+import io.github.petoalbert.application.WordCountRegistry
 import zio._
 import zio.logging._
 
@@ -13,8 +12,8 @@ trait Api {
 }
 
 object Api {
-  val live: ZLayer[Has[HttpServer.Config] with Has[ApplicationService] with Logging, Nothing, Has[Api]] =
-    ZLayer.fromFunction(_ =>
+  val live: ZLayer[Has[HttpServer.Config] with Has[WordCountRegistry] with Logging, Nothing, Has[Api]] =
+    ZLayer.fromFunction(env =>
       new Api with JsonSupport with ZIOSupport {
 
         def routes: Route = itemRoute
@@ -22,7 +21,7 @@ object Api {
         val itemRoute: Route =
           path("words") {
             get {
-              complete(List(WordCount(EventType("one"), 3), WordCount(EventType("two"), 222)))
+              complete(env.get[WordCountRegistry].getWordCounts)
             }
           }
       }
