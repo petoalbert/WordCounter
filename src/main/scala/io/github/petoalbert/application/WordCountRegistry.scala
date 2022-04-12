@@ -1,5 +1,6 @@
 package io.github.petoalbert.application
 
+import io.github.petoalbert.application.WordCountRegistry.Config
 import io.github.petoalbert.domain.{Event, EventType, WordCount}
 import zio.clock.Clock
 import zio.duration.Duration
@@ -14,7 +15,7 @@ trait WordCountRegistry {
 }
 
 class LiveWordCountRegistry(
-  timeWindow: Duration,
+  config: Config,
   clock: Clock.Service,
   queue: TQueue[Event],
   wordCounts: TMap[EventType, Int]
@@ -57,9 +58,9 @@ class LiveWordCountRegistry(
     for {
       event <- queue.peekOption
       _     <- event match {
-                 case Some(value) if (value.timestamp plus timeWindow) isBefore currentTime =>
+                 case Some(value) if (value.timestamp plus config.timeWindow) isBefore currentTime =>
                    queue.take >>> (removeFromMap(value) >>> removeTimedOut(currentTime))
-                 case _                                                                     =>
+                 case _                                                                            =>
                    ZSTM.unit
                }
     } yield ()
@@ -67,12 +68,14 @@ class LiveWordCountRegistry(
 }
 
 object WordCountRegistry {
-  def live(window: Duration): ZLayer[Clock, Nothing, Has[WordCountRegistry]] =
-    ZLayer.fromServiceM[Clock.Service, Any, Nothing, WordCountRegistry](clock =>
+  case class Config(timeWindow: Duration)
+
+  def live: ZLayer[Clock with Has[Config], Nothing, Has[WordCountRegistry]] =
+    ZLayer.fromServicesM[Clock.Service, Config, Any, Nothing, WordCountRegistry]((clock, config) =>
       (for {
         queue <- TQueue.unbounded[Event]
         map   <- TMap.make[EventType, Int]()
-      } yield new LiveWordCountRegistry(window, clock, queue, map)).commit
+      } yield new LiveWordCountRegistry(config, clock, queue, map)).commit
     )
 
   val getWordCounts: ZIO[Has[WordCountRegistry], Nothing, List[WordCount]] =

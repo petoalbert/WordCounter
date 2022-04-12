@@ -1,7 +1,7 @@
 package io.github.petoalbert.application
 
 import io.github.petoalbert.domain.{Event, EventType, WordCount}
-import zio.Has
+import zio.{Has, ZLayer}
 import zio.clock.Clock
 import zio.duration.durationInt
 import zio.test.Assertion._
@@ -44,8 +44,13 @@ object WordCountRegistrySpecs extends DefaultRunnableSpec {
       )
     )
 
+  val config: ZLayer[Any, Nothing, Has[WordCountRegistry.Config]] =
+    ZLayer.succeed(WordCountRegistry.Config(1.second))
+
   def spec: ZSpec[TestEnvironment, Failure] = {
-    specs.provideCustomLayer(WordCountRegistry.live(1.second))
+    specs.provideCustomLayer(
+      (ZLayer.identity[Clock] ++ config) >>> WordCountRegistry.live
+    )
   }
 
 }

@@ -13,7 +13,6 @@ import io.github.petoalbert.api._
 import io.github.petoalbert.application.WordCountRegistry
 import io.github.petoalbert.config.AppConfig
 import zio.clock.Clock
-import zio.duration.durationInt
 
 object Boot extends App {
 
@@ -35,6 +34,8 @@ object Boot extends App {
     // narrowing down to the required part of the config to ensure separation of concerns
     val apiConfigLayer = configLayer.map(c => Has(c.get.api))
 
+    val appConfigLayer = configLayer.map(c => Has(c.get.wordcount))
+
     val actorSystemLayer: TaskLayer[Has[ActorSystem]] = ZLayer.fromManaged {
       ZManaged.make(ZIO(ActorSystem("githubrank-system")))(s => ZIO.fromFuture(_ => s.terminate()).either)
     }
@@ -48,7 +49,7 @@ object Boot extends App {
     }
 
     val applicationLayer: ZLayer[Any, Throwable, Has[WordCountRegistry]] =
-      Clock.live >>> WordCountRegistry.live(1.second)
+      (Clock.live ++ appConfigLayer) >>> WordCountRegistry.live
 
     val apiLayer: TaskLayer[Has[Api]] =
       (apiConfigLayer ++ applicationLayer ++ actorSystemLayer ++ loggingLayer) >>> Api.live
