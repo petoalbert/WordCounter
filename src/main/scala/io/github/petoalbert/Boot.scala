@@ -13,6 +13,7 @@ import io.github.petoalbert.api._
 import io.github.petoalbert.application.WordCountRegistry
 import io.github.petoalbert.config.AppConfig
 import zio.clock.Clock
+import zio.duration.durationInt
 
 object Boot extends App {
 
@@ -47,7 +48,7 @@ object Boot extends App {
     }
 
     val applicationLayer: ZLayer[Any, Throwable, Has[WordCountRegistry]] =
-      Clock.live >>> WordCountRegistry.live
+      Clock.live >>> WordCountRegistry.live(1.second)
 
     val apiLayer: TaskLayer[Has[Api]] =
       (apiConfigLayer ++ applicationLayer ++ actorSystemLayer ++ loggingLayer) >>> Api.live
