@@ -8,6 +8,7 @@ val logbackClassicVersion = "1.2.5"
 val zioAkkaHttpInterop    = "0.5.0"
 val zioJsonVersion        = "0.1.5"
 val akkaHttpZioJson       = "1.37.0"
+val proxVersion           = "0.7.3"
 val dockerReleaseSettings = Seq(
   dockerExposedPorts := Seq(8080),
   dockerExposedVolumes := Seq("/opt/docker/logs"),
@@ -44,6 +45,7 @@ val root = (project in file("."))
       "ch.qos.logback"        % "logback-classic"                  % logbackClassicVersion,
       "dev.zio"               %% "zio-logging"                     % zioLoggingVersion,
       "dev.zio"               %% "zio-logging-slf4j"               % zioLoggingVersion,
+      "io.github.vigoo"       %% "prox-zstream"                    % proxVersion,
       "com.typesafe.akka"     %% "akka-http-testkit"               % akkaHttpVersion % Test,
       "com.typesafe.akka"     %% "akka-stream-testkit"             % akkaVersion % Test,
       "com.typesafe.akka"     %% "akka-actor-testkit-typed"        % akkaVersion % Test,
