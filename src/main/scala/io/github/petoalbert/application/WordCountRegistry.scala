@@ -17,6 +17,9 @@ trait WordCountRegistry {
   def addEvent(event: Event): ZIO[Any, Nothing, Unit]
 }
 
+/*
+ * Keeps track of word counts by event type in a time window.
+ */
 class LiveWordCountRegistry(
   config: Config,
   clock: Clock.Service,

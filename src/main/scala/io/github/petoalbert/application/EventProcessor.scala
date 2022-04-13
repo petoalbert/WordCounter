@@ -15,6 +15,10 @@ import zio.{Exit, Has, ZIO, ZLayer}
 import java.io.IOException
 import java.time.Instant
 
+/*
+ * Parses events from the output stream of a binary executable and sends them
+ * to WordCountRegistry.
+ */
 trait EventProcessor {
   def startProcessing(): ZIO[Any, IOException, Unit]
 }
