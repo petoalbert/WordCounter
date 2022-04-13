@@ -26,23 +26,41 @@ class LiveWordCountRegistry(
 
   implicit val eventOrder: Order[Event] = Order.from((a, b) => a.timestamp.compareTo(b.timestamp))
 
+  private val removeTimedOut: ZIO[Any, Nothing, Unit] =
+    clock.instant.flatMap(instant => removeTimedOut(instant))
+
+  private def removeTimedOut(currentTime: Instant): ZIO[Any, Nothing, Unit] = {
+    val removed = for {
+      event <- heap.get.map(_.getMin)
+      removed <- event match {
+        case Some(value) if (value.timestamp plus config.timeWindow) isBefore currentTime =>
+          heap.update(_.remove) >>> (removeFromMap(value) >>> ZSTM.succeed(true))
+        case _ =>
+          ZSTM.succeed(false)
+      }
+    } yield removed
+
+    removed.commit.flatMap(removed =>
+      if (removed) {
+        removeTimedOut(currentTime)
+      } else {
+        ZIO.unit
+      }
+    )
+  }
+
   override val getWordCounts: ZIO[Any, Nothing, List[WordCount]] =
-    clock.instant.flatMap { time =>
-      (removeTimedOut(time) >>> wordCounts.toList).commit.map(_.map { case (eventType, count) =>
-        WordCount(eventType, count)
-      })
-    }
+    removeTimedOut >>> wordCounts.toList.commit.map(_.map { case (eventType, count) =>
+      WordCount(eventType, count)
+    })
 
   override def addEvent(event: Event): ZIO[Any, Nothing, Unit] =
-    clock.instant.flatMap { time =>
-      (removeTimedOut(time) >>> addToMap(event) >>> heap.update(_.add(event))).commit
-    }
+    removeTimedOut >>> (addToMap(event) >>> heap.update(_.add(event))).commit
+
 
   def getWordCount(eventType: EventType): ZIO[Any, Nothing, Option[WordCount]] =
-    clock.instant.flatMap { time =>
-      (removeTimedOut(time) >>> wordCounts.get(eventType)).commit
-        .map(_.map(count => WordCount(eventType, count)))
-    }
+    removeTimedOut >>> wordCounts.get(eventType).commit
+      .map(_.map(count => WordCount(eventType, count)))
 
   private def removeFromMap(event: Event): ZSTM[Any, Nothing, Unit] =
     for {
@@ -63,17 +81,6 @@ class LiveWordCountRegistry(
       _     <- count match {
                  case Some(count) => wordCounts.put(event.eventType, count + event.words)
                  case None        => wordCounts.put(event.eventType, event.words)
-               }
-    } yield ()
-
-  private def removeTimedOut(currentTime: Instant): ZSTM[Any, Nothing, Unit] =
-    for {
-      event <- heap.get.map(_.getMin)
-      _     <- event match {
-                 case Some(value) if (value.timestamp plus config.timeWindow) isBefore currentTime =>
-                   heap.update(_.remove) >>> (removeFromMap(value) >>> removeTimedOut(currentTime))
-                 case _                                                                            =>
-                   ZSTM.unit
                }
     } yield ()
 
