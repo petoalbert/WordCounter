@@ -1,6 +1,6 @@
 package io.github.petoalbert.application
 
-import io.github.petoalbert.application.JsonProcessor.{Config, ParsedEvent}
+import io.github.petoalbert.application.EventProcessor.{Config, ParsedEvent}
 import io.github.petoalbert.domain.{Event, EventType}
 import io.github.vigoo.prox.ProxError
 import io.github.vigoo.prox.zstream._
@@ -15,17 +15,17 @@ import zio.{Exit, Has, ZIO, ZLayer}
 import java.io.IOException
 import java.time.Instant
 
-trait JsonProcessor {
+trait EventProcessor {
   def startProcessing(): ZIO[Any, IOException, Unit]
 }
 
-class LiveJsonProcessor(
+class LiveEventProcessor(
   logger: Logger[String],
   blocking: zio.blocking.Blocking.Service,
   clock: Clock.Service,
   config: Config,
   registry: WordCountRegistry
-) extends JsonProcessor {
+) extends EventProcessor {
 
   implicit val eventTypeDecoder: JsonDecoder[EventType] = JsonDecoder.string.map(EventType)
   implicit val timestampDecoder: JsonDecoder[Instant]   = JsonDecoder.long.map(Instant.ofEpochSecond)
@@ -69,16 +69,16 @@ class LiveJsonProcessor(
       .catchAll(_ => ZIO.unit)
 }
 
-object JsonProcessor {
+object EventProcessor {
   case class Config(command: String, args: Option[List[String]])
 
-  val live: ZLayer[Logging with Blocking with Clock with Has[Config] with Has[WordCountRegistry], Nothing, Has[JsonProcessor]] =
-    ZLayer.fromServices[Logger[String], Blocking.Service, Clock.Service, Config, WordCountRegistry, JsonProcessor](
-      (logger, blocking, clock, config, registry) => new LiveJsonProcessor(logger, blocking, clock, config, registry)
+  val live: ZLayer[Logging with Blocking with Clock with Has[Config] with Has[WordCountRegistry], Nothing, Has[EventProcessor]] =
+    ZLayer.fromServices[Logger[String], Blocking.Service, Clock.Service, Config, WordCountRegistry, EventProcessor](
+      (logger, blocking, clock, config, registry) => new LiveEventProcessor(logger, blocking, clock, config, registry)
     )
 
-  val startProcessing: ZIO[Has[JsonProcessor], IOException, Unit] =
-    ZIO.accessM[Has[JsonProcessor]](_.get.startProcessing())
+  val startProcessing: ZIO[Has[EventProcessor], IOException, Unit] =
+    ZIO.accessM[Has[EventProcessor]](_.get.startProcessing())
 
   case class ParsedEvent(@jsonField("event_type") eventType: EventType, data: String, timestamp: Instant)
 }

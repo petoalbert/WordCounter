@@ -10,7 +10,7 @@ import zio.logging._
 import zio.logging.slf4j._
 import zio._
 import io.github.petoalbert.api._
-import io.github.petoalbert.application.{JsonProcessor, WordCountRegistry}
+import io.github.petoalbert.application.{EventProcessor, WordCountRegistry}
 import io.github.petoalbert.config.AppConfig
 import zio.blocking.Blocking
 import zio.clock.Clock
@@ -23,17 +23,17 @@ object Boot extends App {
       .flatMap(rawConfig => program.provideCustomLayer(prepareEnvironment(rawConfig)))
       .exitCode
 
-  private val program: RIO[HttpServer with Has[JsonProcessor] with ZEnv, Unit] = {
+  private val program: RIO[HttpServer with Has[EventProcessor] with ZEnv, Unit] = {
     val startHttpServer =
       HttpServer.start.tapM(_ => putStrLn("Server online."))
 
     val startBackgroundProcess =
-      JsonProcessor.startProcessing
+      EventProcessor.startProcessing
 
     startBackgroundProcess.fork.flatMap(_ => startHttpServer.useForever)
   }
 
-  private def prepareEnvironment(rawConfig: Config): TaskLayer[HttpServer with Has[JsonProcessor]] = {
+  private def prepareEnvironment(rawConfig: Config): TaskLayer[HttpServer with Has[EventProcessor]] = {
     val configLayer = TypesafeConfig.fromTypesafeConfig(rawConfig, AppConfig.descriptor)
 
     // narrowing down to the required part of the config to ensure separation of concerns
@@ -41,7 +41,7 @@ object Boot extends App {
 
     val appConfigLayer = configLayer.map(c => Has(c.get.wordcount))
 
-    val jsonProcessorConfigLayer = configLayer.map(c => Has(c.get.jsonProcessor))
+    val eventProcessorConfigLayer = configLayer.map(c => Has(c.get.eventProcessor))
 
     val actorSystemLayer: TaskLayer[Has[ActorSystem]] = ZLayer.fromManaged {
       ZManaged.make(ZIO(ActorSystem("githubrank-system")))(s => ZIO.fromFuture(_ => s.terminate()).either)
@@ -67,9 +67,9 @@ object Boot extends App {
     val serverEnv: TaskLayer[HttpServer] =
       (actorSystemLayer ++ apiConfigLayer ++ (apiLayer >>> routesLayer)) >>> HttpServer.live
 
-    val jsonProcessor: ZLayer[Any, ReadError[String], Has[JsonProcessor]] =
-      (loggingLayer ++ jsonProcessorConfigLayer ++ Clock.live ++ Blocking.live ++ applicationLayer) >>> JsonProcessor.live
+    val eventProcessor: ZLayer[Any, ReadError[String], Has[EventProcessor]] =
+      (loggingLayer ++ eventProcessorConfigLayer ++ Clock.live ++ Blocking.live ++ applicationLayer) >>> EventProcessor.live
 
-    serverEnv ++ jsonProcessor
+    serverEnv ++ eventProcessor
   }
 }

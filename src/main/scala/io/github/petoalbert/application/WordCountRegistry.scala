@@ -31,13 +31,13 @@ class LiveWordCountRegistry(
 
   private def removeTimedOut(currentTime: Instant): ZIO[Any, Nothing, Unit] = {
     val removed = for {
-      event <- heap.get.map(_.getMin)
+      event   <- heap.get.map(_.getMin)
       removed <- event match {
-        case Some(value) if (value.timestamp plus config.timeWindow) isBefore currentTime =>
-          heap.update(_.remove) >>> (removeFromMap(value) >>> ZSTM.succeed(true))
-        case _ =>
-          ZSTM.succeed(false)
-      }
+                   case Some(value) if (value.timestamp plus config.timeWindow) isBefore currentTime =>
+                     heap.update(_.remove) >>> (removeFromMap(value) >>> ZSTM.succeed(true))
+                   case _                                                                            =>
+                     ZSTM.succeed(false)
+                 }
     } yield removed
 
     removed.commit.flatMap(removed =>
@@ -57,9 +57,10 @@ class LiveWordCountRegistry(
   override def addEvent(event: Event): ZIO[Any, Nothing, Unit] =
     removeTimedOut >>> (addToMap(event) >>> heap.update(_.add(event))).commit
 
-
   def getWordCount(eventType: EventType): ZIO[Any, Nothing, Option[WordCount]] =
-    removeTimedOut >>> wordCounts.get(eventType).commit
+    removeTimedOut >>> wordCounts
+      .get(eventType)
+      .commit
       .map(_.map(count => WordCount(eventType, count)))
 
   private def removeFromMap(event: Event): ZSTM[Any, Nothing, Unit] =
