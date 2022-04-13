@@ -1,14 +1,15 @@
-val akkaHttpVersion       = "10.2.6"
-val akkaVersion           = "2.6.15"
-val zioVersion            = "1.0.10"
-val zioLoggingVersion     = "0.5.11"
-val zioConfigVersion      = "1.0.6"
-val zioRSVersion          = "1.3.5"
-val logbackClassicVersion = "1.2.5"
-val zioAkkaHttpInterop    = "0.5.0"
-val zioJsonVersion        = "0.1.5"
-val akkaHttpZioJson       = "1.37.0"
-val proxVersion           = "0.7.3"
+val akkaHttpVersion        = "10.2.6"
+val akkaVersion            = "2.6.15"
+val zioVersion             = "1.0.10"
+val zioLoggingVersion      = "0.5.11"
+val zioConfigVersion       = "1.0.6"
+val zioRSVersion           = "1.3.5"
+val logbackClassicVersion  = "1.2.5"
+val zioAkkaHttpInterop     = "0.5.0"
+val zioJsonVersion         = "0.1.5"
+val akkaHttpZioJson        = "1.37.0"
+val proxVersion            = "0.7.3"
+val catsCollectionsVersion = "0.9.0"
 val dockerReleaseSettings = Seq(
   dockerExposedPorts := Seq(8080),
   dockerExposedVolumes := Seq("/opt/docker/logs"),
@@ -46,6 +47,7 @@ val root = (project in file("."))
       "dev.zio"               %% "zio-logging"                     % zioLoggingVersion,
       "dev.zio"               %% "zio-logging-slf4j"               % zioLoggingVersion,
       "io.github.vigoo"       %% "prox-zstream"                    % proxVersion,
+      "org.typelevel"         %% "cats-collections-core"           % catsCollectionsVersion,
       "com.typesafe.akka"     %% "akka-http-testkit"               % akkaHttpVersion % Test,
       "com.typesafe.akka"     %% "akka-stream-testkit"             % akkaVersion % Test,
       "com.typesafe.akka"     %% "akka-actor-testkit-typed"        % akkaVersion % Test,

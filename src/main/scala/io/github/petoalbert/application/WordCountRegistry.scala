@@ -1,10 +1,12 @@
 package io.github.petoalbert.application
 
+import cats.Order
+import cats.collections.Heap
 import io.github.petoalbert.application.WordCountRegistry.Config
 import io.github.petoalbert.domain.{Event, EventType, WordCount}
 import zio.clock.Clock
 import zio.duration.Duration
-import zio.stm.{TMap, TQueue, ZSTM}
+import zio.stm.{TMap, TRef, ZSTM}
 import zio.{Has, ZIO, ZLayer}
 
 import java.time.Instant
@@ -14,21 +16,15 @@ trait WordCountRegistry {
   def addEvent(event: Event): ZIO[Any, Nothing, Unit]
 }
 
-/*
- * Note: I considered that the events would be added with an order that reflects their
- * timestamp, so the implementation just puts them into a TQueue in the order they arrive,
- * and removes elements outside the time window by checking the other end of the queue.
- *
- * If this assumption is not true, we should use some sorted collection (e.g. Binary Heap)
- * to store Events where we would sort by their timestamp. This would have somewhat worse
- * performance compared to using TQueue but it would be consistent.
- */
 class LiveWordCountRegistry(
-  config: Config,
-  clock: Clock.Service,
-  queue: TQueue[Event],
-  wordCounts: TMap[EventType, Int]
+                             config: Config,
+                             clock: Clock.Service,
+                             heap: TRef[Heap[Event]],
+                             wordCounts: TMap[EventType, Int]
 ) extends WordCountRegistry {
+
+  implicit val eventOrder: Order[Event] = Order.from((a,b) => a.timestamp.compareTo(b.timestamp))
+
   override val getWordCounts: ZIO[Any, Nothing, List[WordCount]] =
     clock.instant.flatMap { time =>
       (removeTimedOut(time) >>> wordCounts.toList).commit.map(_.map { case (eventType, count) =>
@@ -38,7 +34,7 @@ class LiveWordCountRegistry(
 
   override def addEvent(event: Event): ZIO[Any, Nothing, Unit] =
     clock.instant.flatMap { time =>
-      (removeTimedOut(time) >>> addToMap(event) >>> queue.offer(event)).commit
+      (removeTimedOut(time) >>> addToMap(event) >>> heap.update(_.add(event))).commit
     }
 
   private def removeFromMap(event: Event): ZSTM[Any, Nothing, Unit] =
@@ -65,10 +61,10 @@ class LiveWordCountRegistry(
 
   private def removeTimedOut(currentTime: Instant): ZSTM[Any, Nothing, Unit] =
     for {
-      event <- queue.peekOption
+      event <- heap.get.map(_.getMin)
       _     <- event match {
                  case Some(value) if (value.timestamp plus config.timeWindow) isBefore currentTime =>
-                   queue.take >>> (removeFromMap(value) >>> removeTimedOut(currentTime))
+                   heap.update(_.remove) >>> (removeFromMap(value) >>> removeTimedOut(currentTime))
                  case _                                                                            =>
                    ZSTM.unit
                }
@@ -82,9 +78,9 @@ object WordCountRegistry {
   def live: ZLayer[Clock with Has[Config], Nothing, Has[WordCountRegistry]] =
     ZLayer.fromServicesM[Clock.Service, Config, Any, Nothing, WordCountRegistry]((clock, config) =>
       (for {
-        queue <- TQueue.unbounded[Event]
+        heap <- TRef.make(Heap.empty[Event])
         map   <- TMap.make[EventType, Int]()
-      } yield new LiveWordCountRegistry(config, clock, queue, map)).commit
+      } yield new LiveWordCountRegistry(config, clock, heap, map)).commit
     )
 
   val getWordCounts: ZIO[Has[WordCountRegistry], Nothing, List[WordCount]] =
