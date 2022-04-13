@@ -10,9 +10,11 @@ import zio.logging._
 import zio.logging.slf4j._
 import zio._
 import io.github.petoalbert.api._
-import io.github.petoalbert.application.WordCountRegistry
+import io.github.petoalbert.application.{JsonProcessor, WordCountRegistry}
 import io.github.petoalbert.config.AppConfig
+import zio.blocking.Blocking
 import zio.clock.Clock
+import zio.config.ReadError
 
 object Boot extends App {
 
@@ -21,20 +23,25 @@ object Boot extends App {
       .flatMap(rawConfig => program.provideCustomLayer(prepareEnvironment(rawConfig)))
       .exitCode
 
-  private val program: RIO[HttpServer with ZEnv, Unit] = {
+  private val program: RIO[HttpServer with Has[JsonProcessor] with ZEnv, Unit] = {
     val startHttpServer =
       HttpServer.start.tapM(_ => putStrLn("Server online."))
 
-    startHttpServer.useForever
+    val startBackgroundProcess =
+      JsonProcessor.startProcessing
+
+    startBackgroundProcess.fork.flatMap(_ => startHttpServer.useForever)
   }
 
-  private def prepareEnvironment(rawConfig: Config): TaskLayer[HttpServer] = {
+  private def prepareEnvironment(rawConfig: Config): TaskLayer[HttpServer with Has[JsonProcessor]] = {
     val configLayer = TypesafeConfig.fromTypesafeConfig(rawConfig, AppConfig.descriptor)
 
     // narrowing down to the required part of the config to ensure separation of concerns
     val apiConfigLayer = configLayer.map(c => Has(c.get.api))
 
     val appConfigLayer = configLayer.map(c => Has(c.get.wordcount))
+
+    val jsonProcessorConfigLayer = configLayer.map(c => Has(c.get.jsonProcessor))
 
     val actorSystemLayer: TaskLayer[Has[ActorSystem]] = ZLayer.fromManaged {
       ZManaged.make(ZIO(ActorSystem("githubrank-system")))(s => ZIO.fromFuture(_ => s.terminate()).either)
@@ -48,7 +55,7 @@ object Boot extends App {
       logFormat.format(correlationId, message)
     }
 
-    val applicationLayer: ZLayer[Any, Throwable, Has[WordCountRegistry]] =
+    val applicationLayer: ZLayer[Any, ReadError[String], Has[WordCountRegistry]] =
       (Clock.live ++ appConfigLayer) >>> WordCountRegistry.live
 
     val apiLayer: TaskLayer[Has[Api]] =
@@ -60,6 +67,9 @@ object Boot extends App {
     val serverEnv: TaskLayer[HttpServer] =
       (actorSystemLayer ++ apiConfigLayer ++ (apiLayer >>> routesLayer)) >>> HttpServer.live
 
-    serverEnv
+    val jsonProcessor: ZLayer[Any, ReadError[String], Has[JsonProcessor]] =
+      (loggingLayer ++ jsonProcessorConfigLayer ++ Clock.live ++ Blocking.live ++ applicationLayer) >>> JsonProcessor.live
+
+    serverEnv ++ jsonProcessor
   }
 }
