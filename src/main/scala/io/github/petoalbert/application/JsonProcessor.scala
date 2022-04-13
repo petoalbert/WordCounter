@@ -28,7 +28,7 @@ class LiveJsonProcessor(
 ) extends JsonProcessor {
 
   implicit val eventTypeDecoder: JsonDecoder[EventType] = JsonDecoder.string.map(EventType)
-  implicit val timestampDecoder: JsonDecoder[Instant]   = JsonDecoder.long.map(Instant.ofEpochMilli)
+  implicit val timestampDecoder: JsonDecoder[Instant]   = JsonDecoder.long.map(Instant.ofEpochSecond)
   implicit val eventDecoder: JsonDecoder[ParsedEvent]   = DeriveJsonDecoder.gen[ParsedEvent]
 
   private val proc = Process(config.command, config.args.getOrElse(List.empty)).drainOutput(
