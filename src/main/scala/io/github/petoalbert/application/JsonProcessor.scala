@@ -72,9 +72,7 @@ class LiveJsonProcessor(
 object JsonProcessor {
   case class Config(command: String, args: Option[List[String]])
 
-  val live: ZLayer[Logging with Blocking with Clock with Has[Config] with Has[WordCountRegistry], Nothing, Has[
-    JsonProcessor
-  ]] =
+  val live: ZLayer[Logging with Blocking with Clock with Has[Config] with Has[WordCountRegistry], Nothing, Has[JsonProcessor]] =
     ZLayer.fromServices[Logger[String], Blocking.Service, Clock.Service, Config, WordCountRegistry, JsonProcessor](
       (logger, blocking, clock, config, registry) => new LiveJsonProcessor(logger, blocking, clock, config, registry)
     )
