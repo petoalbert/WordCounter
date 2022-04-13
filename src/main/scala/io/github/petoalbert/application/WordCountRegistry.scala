@@ -13,17 +13,18 @@ import java.time.Instant
 
 trait WordCountRegistry {
   val getWordCounts: ZIO[Any, Nothing, List[WordCount]]
+  def getWordCount(eventType: EventType): ZIO[Any, Nothing, Option[WordCount]]
   def addEvent(event: Event): ZIO[Any, Nothing, Unit]
 }
 
 class LiveWordCountRegistry(
-                             config: Config,
-                             clock: Clock.Service,
-                             heap: TRef[Heap[Event]],
-                             wordCounts: TMap[EventType, Int]
+  config: Config,
+  clock: Clock.Service,
+  heap: TRef[Heap[Event]],
+  wordCounts: TMap[EventType, Int]
 ) extends WordCountRegistry {
 
-  implicit val eventOrder: Order[Event] = Order.from((a,b) => a.timestamp.compareTo(b.timestamp))
+  implicit val eventOrder: Order[Event] = Order.from((a, b) => a.timestamp.compareTo(b.timestamp))
 
   override val getWordCounts: ZIO[Any, Nothing, List[WordCount]] =
     clock.instant.flatMap { time =>
@@ -35,6 +36,12 @@ class LiveWordCountRegistry(
   override def addEvent(event: Event): ZIO[Any, Nothing, Unit] =
     clock.instant.flatMap { time =>
       (removeTimedOut(time) >>> addToMap(event) >>> heap.update(_.add(event))).commit
+    }
+
+  def getWordCount(eventType: EventType): ZIO[Any, Nothing, Option[WordCount]] =
+    clock.instant.flatMap { time =>
+      (removeTimedOut(time) >>> wordCounts.get(eventType)).commit
+        .map(_.map(count => WordCount(eventType, count)))
     }
 
   private def removeFromMap(event: Event): ZSTM[Any, Nothing, Unit] =
@@ -79,7 +86,7 @@ object WordCountRegistry {
     ZLayer.fromServicesM[Clock.Service, Config, Any, Nothing, WordCountRegistry]((clock, config) =>
       (for {
         heap <- TRef.make(Heap.empty[Event])
-        map   <- TMap.make[EventType, Int]()
+        map  <- TMap.make[EventType, Int]()
       } yield new LiveWordCountRegistry(config, clock, heap, map)).commit
     )
 
