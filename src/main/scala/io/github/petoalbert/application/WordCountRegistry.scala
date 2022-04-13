@@ -14,6 +14,15 @@ trait WordCountRegistry {
   def addEvent(event: Event): ZIO[Any, Nothing, Unit]
 }
 
+/*
+ * Note: I considered that the events would be added with an order that reflects their
+ * timestamp, so the implementation just puts them into a TQueue in the order they arrive,
+ * and removes elements outside the time window by checking the other end of the queue.
+ *
+ * If this assumption is not true, we should use some sorted collection (e.g. Binary Heap)
+ * to store Events where we would sort by their timestamp. This would have somewhat worse
+ * performance compared to using TQueue but it would be consistent.
+ */
 class LiveWordCountRegistry(
   config: Config,
   clock: Clock.Service,
