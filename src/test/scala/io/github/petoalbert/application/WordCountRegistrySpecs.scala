@@ -41,6 +41,16 @@ object WordCountRegistrySpecs extends DefaultRunnableSpec {
           _ <- TestClock.adjust(2.second)
           res <- WordCountRegistry.getWordCounts
         } yield assert(res)(equalTo(List(WordCount(EventType("a"), 3))))
+      ),
+      testM("adding out-of-window items doesn't change anything")(
+        for {
+          before <- zio.clock.instant
+          _ <- TestClock.adjust(10.seconds)
+          now <- zio.clock.instant
+          _ <- WordCountRegistry.addEvent(Event(EventType("a"), 2, now))
+          _ <- WordCountRegistry.addEvent(Event(EventType("a"), 3, before))
+          res <- WordCountRegistry.getWordCounts
+        } yield assert(res)(equalTo(List(WordCount(EventType("a"), 2))))
       )
     )
 
